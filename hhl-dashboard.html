@@ -741,6 +741,18 @@ function renderDpCalendar(targetId,year,month,showPrev){
     button.addEventListener("click",()=>chooseDpDay(button.dataset.date));
   });
 }
+function populateWebinarFilter(){
+  const webinarDates=[...new Set(AD_ROWS
+    .filter(row=>state.funnel==="all"||row.offer===state.funnel)
+    .map(row=>row.webinarDate instanceof Date&&!isNaN(row.webinarDate)?isoDate(row.webinarDate):"")
+    .filter(Boolean))].sort().reverse();
+  if(state.webinar!=="all"&&!webinarDates.includes(state.webinar))state.webinar="all";
+  $("webinarFilter").innerHTML='<option value="all">All webinar dates</option>'+webinarDates.map(value=>{
+    const label=parseDate(value).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+    return `<option value="${value}">${esc(label)}</option>`;
+  }).join("");
+  $("webinarFilter").value=state.webinar;
+}
 function populateFilters(){
   const sources=[...new Set(AD_ROWS.map(r=>r.platform))].filter(Boolean).sort();
   $("sourceFilter").innerHTML='<option value="all">All platforms</option>'+sources.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
@@ -750,13 +762,7 @@ function populateFilters(){
   if(state.funnel!=="all"&&!funnels.includes(state.funnel))state.funnel="all";
   $("pageFilter").innerHTML='<option value="all">All funnels</option>'+funnels.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join("");
   $("pageFilter").value=state.funnel;
-  const webinarDates=[...new Set(AD_ROWS.map(row=>row.webinarDate instanceof Date&&!isNaN(row.webinarDate)?isoDate(row.webinarDate):"").filter(Boolean))].sort().reverse();
-  if(state.webinar!=="all"&&!webinarDates.includes(state.webinar))state.webinar="all";
-  $("webinarFilter").innerHTML='<option value="all">All webinar dates</option>'+webinarDates.map(value=>{
-    const label=parseDate(value).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
-    return `<option value="${value}">${esc(label)}</option>`;
-  }).join("");
-  $("webinarFilter").value=state.webinar;
+  populateWebinarFilter();
 }
 function filteredGa(){
   const shouldFilterSource=state.view==="marketing";
@@ -1314,7 +1320,11 @@ $("dpUpdate").addEventListener("click",()=>{
 $("dpOverlay").addEventListener("click",event=>{if(event.target===$("dpOverlay"))dpClose()});
 $("dpOverlay").addEventListener("keydown",event=>{if(event.key==="Escape")dpClose()});
 $("sourceFilter").addEventListener("change",()=>{state.source=$("sourceFilter").value;render()});
-$("pageFilter").addEventListener("change",()=>{state.funnel=$("pageFilter").value;render()});
+$("pageFilter").addEventListener("change",()=>{
+  state.funnel=$("pageFilter").value;
+  populateWebinarFilter();
+  render();
+});
 $("webinarFilter").addEventListener("change",()=>{state.webinar=$("webinarFilter").value;render()});
 $("funnelMetricTabs").addEventListener("click",event=>{
   const button=event.target.closest("[data-metric]");

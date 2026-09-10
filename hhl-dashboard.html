@@ -530,6 +530,7 @@ function mapAdRows(rows){
       unknown:num(row["Unknown Customer"]),
       purchases:num(row.Purchase),
       revenue:num(row.Revenue),
+      customerId:String(row["Contact ID"]||"").trim(),
       customerSaleDate:saleDate,
       customerLeadDate:leadDate
     };
@@ -836,24 +837,26 @@ function filteredEmbFor(start,end){
 }
 function summarizeAds(rows,start=state.start,end=state.end){
   const summary={spend:0,clicks:0,impressions:0,leads:0,uniq:0,purchases:0,revenue:0};
+  const customerIds=new Set();
+  let legacyUniqueCustomers=0;
   rows.forEach(row=>{
     const saleDate=row.customerSaleDate instanceof Date&&!isNaN(row.customerSaleDate)?row.customerSaleDate:row.date;
-    const hasLeadDate=row.customerLeadDate instanceof Date&&!isNaN(row.customerLeadDate);
-    const leadQualifies=!hasLeadDate||dateInRangeFor(row.customerLeadDate,start,end);
     if(dateInRangeFor(row.date,start,end)){
       summary.spend+=row.spend||0;
       summary.clicks+=row.clicks||0;
       summary.impressions+=row.impressions||((row.clicks||0)*20);
       summary.leads+=row.leads||0;
     }
-    if(dateInRangeFor(saleDate,start,end)&&leadQualifies){
-      summary.uniq+=row.uniq||0;
+    if(dateInRangeFor(saleDate,start,end)){
+      if(row.customerId)customerIds.add(row.customerId);
+      else legacyUniqueCustomers+=row.uniq||0;
     }
     if(dateInRangeFor(saleDate,start,end)){
       summary.purchases+=row.purchases||0;
       summary.revenue+=row.revenue||0;
     }
   });
+  summary.uniq=customerIds.size+legacyUniqueCustomers;
   summary.cpl=summary.leads?summary.spend/summary.leads:null;
   summary.cpc=summary.clicks?summary.spend/summary.clicks:null;
   summary.ctr=summary.impressions?summary.clicks/summary.impressions:null;

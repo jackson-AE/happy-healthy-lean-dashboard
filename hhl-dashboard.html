@@ -336,6 +336,7 @@ const $=id=>document.getElementById(id);
 const DAY=86400000;
 const CONFIG={
   adDataUrl:apiPath("/api/reporting-data"),
+  funnels:["AE - 3 Day Losing Weight","AE - Thyroid Transformation Masterclass"],
   platforms:[
     {key:"Facebook",aliases:["facebook","fb","meta","instagram","ig"]},
     {key:"Google",aliases:["google","youtube","yt"]},
@@ -447,17 +448,20 @@ function mapPlatform(value){
 }
 function detectOfferMarker(value){
   const text=String(value||"").toLowerCase();
-  if(text.includes("glp")||text.includes("tirz")||text.includes("tirzepatide")||/\btir\b/.test(text))return "GLP1";
-  if(text.includes("trt")||text.includes("starttoday"))return "TRT";
+  const losingWeight=text.indexOf("ae - 3 day losing weight");
+  const thyroid=text.indexOf("ae - thyroid transformation masterclass");
+  if(losingWeight>=0&&thyroid>=0)return losingWeight<thyroid?"AE - 3 Day Losing Weight":"AE - Thyroid Transformation Masterclass";
+  if(losingWeight>=0||text.includes("3dlwm")||text.includes("3d lwm")||text.includes("weight loss masterclass")||text.includes("wlmc"))return "AE - 3 Day Losing Weight";
+  if(thyroid>=0||text.includes("3dttm")||text.includes("ttmc")||text.includes("thyroid masterclass"))return "AE - Thyroid Transformation Masterclass";
   return "";
 }
 function normalizeOffer(value,fallbackText=""){
+  const explicit=String(value||"").trim();
+  const explicitOffer=detectOfferMarker(explicit);
+  if(explicitOffer)return explicitOffer;
   const fallbackOffer=detectOfferMarker(fallbackText);
   if(fallbackOffer)return fallbackOffer;
-  const explicit=String(value||"").trim().toLowerCase();
-  if(explicit==="glp1"||explicit==="glp-1")return "GLP1";
-  if(explicit==="trt")return "TRT";
-  return "TRT";
+  return "";
 }
 function gaDate(row){return parseDate(row.Date)}
 function embDate(row){return parseDate(row["Received At"])}
@@ -736,7 +740,7 @@ function populateFilters(){
   $("sourceFilter").innerHTML='<option value="all">All platforms</option>'+sources.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
   if(state.source!=="all"&&!sources.includes(state.source))state.source="all";
   $("sourceFilter").value=state.source;
-  const funnels=[...new Set(AD_ROWS.map(r=>r.offer))].filter(Boolean).sort();
+  const funnels=CONFIG.funnels.filter(funnel=>AD_ROWS.some(row=>row.offer===funnel));
   if(state.funnel!=="all"&&!funnels.includes(state.funnel))state.funnel="all";
   $("pageFilter").innerHTML='<option value="all">All funnels</option>'+funnels.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join("");
   $("pageFilter").value=state.funnel;

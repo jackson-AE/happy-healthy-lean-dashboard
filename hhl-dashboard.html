@@ -68,6 +68,7 @@
   .field select{min-width:200px}
   .field:first-child select{min-width:190px}
   .field:nth-child(2) select{min-width:220px}
+  .field:nth-child(3) select{min-width:180px}
   .field.search{width:300px}
   .field.search input{width:100%}
   .date-stack{align-items:flex-start;margin-left:auto;min-width:0;flex:0 0 auto}
@@ -269,6 +270,10 @@
         <label for="pageFilter">Funnel</label>
         <select id="pageFilter"><option value="all">All funnels</option></select>
       </div>
+      <div class="field">
+        <label for="webinarFilter">Webinar Date</label>
+        <select id="webinarFilter"><option value="all">All webinar dates</option></select>
+      </div>
       <div class="field date-stack">
         <label>Date Range</label>
         <div class="date-line">
@@ -345,7 +350,7 @@ const CONFIG={
   ]
 };
 let GA_ROWS=[],EMB_ROWS=[],AD_ROWS=[],DATA_TS="",BOUNDS={min:null,max:null},DEMO_MODE=false;
-const state={view:"marketing",range:"last_7",start:null,end:null,source:"all",funnel:"all",page:"all",search:"",selectedMetric:"pageVisits"};
+const state={view:"marketing",range:"last_7",start:null,end:null,source:"all",funnel:"all",webinar:"all",page:"all",search:"",selectedMetric:"pageVisits"};
 const DP_PRESETS=[
   {id:"today",label:"Today"},
   {id:"yesterday",label:"Yesterday"},
@@ -509,6 +514,7 @@ function mapAdRows(rows){
     const ad=String(row.Ad||row["Ad Path"]||row["UTM Content"]||"").trim();
     return {
       date:adDate(row),
+      webinarDate:parseDate(row["Webinar Date"]),
       offer:normalizeOffer(row.Offer,[campaign,adset,ad].join(" ")),
       platform:mapPlatform(source),
       campaign,
@@ -744,6 +750,13 @@ function populateFilters(){
   if(state.funnel!=="all"&&!funnels.includes(state.funnel))state.funnel="all";
   $("pageFilter").innerHTML='<option value="all">All funnels</option>'+funnels.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join("");
   $("pageFilter").value=state.funnel;
+  const webinarDates=[...new Set(AD_ROWS.map(row=>row.webinarDate instanceof Date&&!isNaN(row.webinarDate)?isoDate(row.webinarDate):"").filter(Boolean))].sort().reverse();
+  if(state.webinar!=="all"&&!webinarDates.includes(state.webinar))state.webinar="all";
+  $("webinarFilter").innerHTML='<option value="all">All webinar dates</option>'+webinarDates.map(value=>{
+    const label=parseDate(value).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+    return `<option value="${value}">${esc(label)}</option>`;
+  }).join("");
+  $("webinarFilter").value=state.webinar;
 }
 function filteredGa(){
   const shouldFilterSource=state.view==="marketing";
@@ -781,6 +794,7 @@ function filteredAdsFor(start,end){
   return AD_ROWS.filter(row=>adRowInRange(row,start,end)
     &&(!shouldFilterSource||state.source==="all"||row.platform===state.source)
     &&(state.funnel==="all"||row.offer===state.funnel)
+    &&(state.webinar==="all"||(row.webinarDate instanceof Date&&!isNaN(row.webinarDate)&&isoDate(row.webinarDate)===state.webinar))
     &&searchHit(row));
 }
 function filteredAds(){
@@ -1301,6 +1315,7 @@ $("dpOverlay").addEventListener("click",event=>{if(event.target===$("dpOverlay")
 $("dpOverlay").addEventListener("keydown",event=>{if(event.key==="Escape")dpClose()});
 $("sourceFilter").addEventListener("change",()=>{state.source=$("sourceFilter").value;render()});
 $("pageFilter").addEventListener("change",()=>{state.funnel=$("pageFilter").value;render()});
+$("webinarFilter").addEventListener("change",()=>{state.webinar=$("webinarFilter").value;render()});
 $("funnelMetricTabs").addEventListener("click",event=>{
   const button=event.target.closest("[data-metric]");
   if(!button)return;

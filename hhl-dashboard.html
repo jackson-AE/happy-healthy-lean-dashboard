@@ -1091,8 +1091,8 @@ function renderSummary(ga,emb){
     {key:"cpc",tone:"cpc",icon:"CPC",label:"CPC",value:ad.cpc==null?"-":money2(ad.cpc),delta:deltaText(ad.cpc||0,pad.cpc||0),color:"#6366f1",series:daily.map(x=>x.cpc),format:money2},
     {key:"funnelStarts",tone:"funnel",icon:"FS",label:"Funnel Starts",value:fmt(ad.funnelStarts),delta:"Start Rate "+pct2(ad.startRate||0),color:"#3b82f6",series:daily.map(x=>x.quiz),format:fmt},
     {key:"funnelPurCvr",tone:"cvr",icon:"CVR",label:"Funnel Pur CVR",value:ad.funnelPurCvr==null?"-":pct(ad.funnelPurCvr),delta:deltaText(ad.funnelPurCvr||0,pad.funnelPurCvr||0),color:"#06b6d4",series:daily.map(x=>x.funnelPurCvr),format:pct,adaptive:true},
-    {key:"leadCloseCvr",tone:"leadclose",icon:"LC",label:"Lead > Close CVR",value:ad.leadCloseCvr==null?"-":pct(ad.leadCloseCvr),delta:deltaText(ad.leadCloseCvr||0,pad.leadCloseCvr||0),color:"#06b6d4",series:daily.map(x=>x.leadCloseCvr),format:pct,adaptive:true},
-    {key:"aov",tone:"aov",icon:"AOV",label:"AOV",value:ad.aov==null?"-":money2(ad.aov),delta:deltaText(ad.aov||0,pad.aov||0),color:"#22c55e",series:daily.map(x=>x.aov),format:money2},
+    {key:"orders",tone:"leadclose",icon:"O",label:"Orders",value:fmt(ad.purchases),delta:deltaText(ad.purchases,pad.purchases),color:"#06b6d4",series:daily.map(x=>x.purchases),format:fmt},
+    {key:"revenue",tone:"aov",icon:"REV",label:"Revenue",value:money2(ad.revenue),delta:deltaText(ad.revenue,pad.revenue),color:"#22c55e",series:daily.map(x=>x.revenue),format:money2},
     {key:"roas",tone:"roas",icon:"R",label:"ROAS",value:ad.roas==null?"-":roas2(ad.roas),delta:deltaText(ad.roas||0,pad.roas||0),color:"#a3e635",series:daily.map(x=>x.roas),format:roas2,adaptive:true},
   ];
   const funnelOptinRate=ad.funnelStarts&&ad.leads?ad.leads/ad.funnelStarts:0;
@@ -1107,7 +1107,7 @@ function renderSummary(ga,emb){
     {key:"funnelPurCvr",tone:"cvr",icon:"CVR",label:"Funnel Pur CVR",value:ad.funnelPurCvr==null?"-":pct(ad.funnelPurCvr),delta:deltaText(ad.funnelPurCvr||0,pad.funnelPurCvr||0),color:"#06b6d4",series:daily.map(x=>x.funnelPurCvr),format:pct,adaptive:true},
     {key:"aov",tone:"close",icon:"AOV",label:"AOV",value:ad.aov==null?"-":money2(ad.aov),delta:deltaText(ad.aov||0,pad.aov||0),color:"#a3e635",series:daily.map(x=>x.purchases?ad.aov||0:0),format:money2},
   ];
-  const marketingKeys=new Set(["spend","clicks","leads","cpl","uniq","cac","cpc","leadCloseCvr","aov","roas"]);
+  const marketingKeys=new Set(["spend","clicks","leads","cpl","uniq","cac","cpc","orders","revenue","roas"]);
   const cards=state.view==="funnel"?funnelCards:allCards.filter(card=>marketingKeys.has(card.key));
   $("summaryCards").innerHTML=cards.map(card=>`
     <article class="summary-card tone-${card.tone}">

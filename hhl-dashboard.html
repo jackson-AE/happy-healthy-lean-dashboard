@@ -763,6 +763,24 @@ function populateWebinarFilter(){
   }).join("");
   select.value=state.webinar;
 }
+function applyWebinarDateRange(){
+  if(state.funnel==="all"||state.webinar==="all")return;
+  const webinarEnd=parseDate(state.webinar);
+  if(!webinarEnd)return;
+  const leadDates=AD_ROWS.filter(row=>
+    row.offer===state.funnel&&
+    row.webinarDate instanceof Date&&!isNaN(row.webinarDate)&&isoDate(row.webinarDate)===state.webinar&&
+    (state.source==="all"||row.platform===state.source)&&
+    row.date instanceof Date&&!isNaN(row.date)&&
+    num(row.leads)>0&&
+    row.date<=webinarEnd
+  ).map(row=>row.date);
+  if(!leadDates.length)return;
+  state.range="custom";
+  state.start=cloneDate(new Date(Math.min(...leadDates)));
+  state.end=cloneDate(webinarEnd);
+  updateDateTrigger();
+}
 function populateFilters(){
   const sources=[...new Set(AD_ROWS.map(r=>r.platform))].filter(Boolean).sort();
   $("sourceFilter").innerHTML='<option value="all">All platforms</option>'+sources.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
@@ -1340,14 +1358,22 @@ $("dpUpdate").addEventListener("click",()=>{
 });
 $("dpOverlay").addEventListener("click",event=>{if(event.target===$("dpOverlay"))dpClose()});
 $("dpOverlay").addEventListener("keydown",event=>{if(event.key==="Escape")dpClose()});
-$("sourceFilter").addEventListener("change",()=>{state.source=$("sourceFilter").value;render()});
+$("sourceFilter").addEventListener("change",()=>{
+  state.source=$("sourceFilter").value;
+  applyWebinarDateRange();
+  render();
+});
 $("pageFilter").addEventListener("change",()=>{
   state.funnel=$("pageFilter").value;
   state.webinar="all";
   populateWebinarFilter();
   render();
 });
-$("webinarFilter").addEventListener("change",()=>{state.webinar=$("webinarFilter").value;render()});
+$("webinarFilter").addEventListener("change",()=>{
+  state.webinar=$("webinarFilter").value;
+  applyWebinarDateRange();
+  render();
+});
 $("funnelMetricTabs").addEventListener("click",event=>{
   const button=event.target.closest("[data-metric]");
   if(!button)return;

@@ -10,7 +10,7 @@ let lastGoodData = null;
 
 function requestJson(url, redirects = 0) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, (res) => {
+    const req = https.get(url, { family: 4 }, (res) => {
       let data = "";
       res.setEncoding("utf8");
       res.on("data", (chunk) => { data += chunk; });
@@ -40,7 +40,6 @@ async function loadReportingData() {
 
   const url = new URL(CONFIG.appsScriptUrl);
   url.searchParams.set("key", CONFIG.appsScriptSecret);
-  url.searchParams.set("columns", "marketing");
 
   try {
     const payload = await requestJson(url.toString());

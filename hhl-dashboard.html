@@ -518,6 +518,7 @@ function mapAdRows(rows){
       offer:normalizeOffer(row.Offer,[campaign,adset,ad].join(" ")),
       platform:mapPlatform(source),
       campaign,
+      campaignId:String(row["Campaign ID"]||"").trim(),
       adset,
       ad,
       impressions:num(row.Impressions||row.Impression),
@@ -767,19 +768,51 @@ function applyWebinarDateRange(){
   if(state.funnel==="all"||state.webinar==="all")return;
   const webinarEnd=parseDate(state.webinar);
   if(!webinarEnd)return;
-  const leadDates=AD_ROWS.filter(row=>
+  const cohortRows=AD_ROWS.filter(row=>
     row.offer===state.funnel&&
     row.webinarDate instanceof Date&&!isNaN(row.webinarDate)&&isoDate(row.webinarDate)===state.webinar&&
     (state.source==="all"||row.platform===state.source)&&
     row.date instanceof Date&&!isNaN(row.date)&&
-    num(row.leads)>0&&
-    row.date<=webinarEnd
-  ).map(row=>row.date);
-  if(!leadDates.length)return;
+    num(row.leads)>0
+  );
+  const campaignKeys=cohortCampaignKeys(cohortRows);
+  const deliveryDates=[];
+  campaignKeys.forEach(key=>{
+    const [platform,campaignId]=key.split("\u001f");
+    const cohortWebinars=[...new Set(AD_ROWS.filter(row=>
+      row.platform===platform&&row.campaignId===campaignId&&row.offer===state.funnel&&
+      num(row.leads)>0&&row.webinarDate instanceof Date&&!isNaN(row.webinarDate)
+    ).map(row=>isoDate(row.webinarDate)))].sort();
+    const currentIndex=cohortWebinars.indexOf(state.webinar);
+    const previousWebinar=currentIndex>0?parseDate(cohortWebinars[currentIndex-1]):null;
+    const nextWebinar=currentIndex>=0&&currentIndex<cohortWebinars.length-1?parseDate(cohortWebinars[currentIndex+1]):null;
+    AD_ROWS.forEach(row=>{
+      if(row.platform!==platform||row.campaignId!==campaignId||!(num(row.spend)>0||num(row.clicks)>0))return;
+      if(!(row.date instanceof Date)||isNaN(row.date))return;
+      if(previousWebinar&&row.date<=previousWebinar)return;
+      if(nextWebinar&&row.date>=nextWebinar)return;
+      deliveryDates.push(row.date);
+    });
+  });
+  const leadDates=cohortRows.filter(row=>row.date<=webinarEnd).map(row=>row.date);
+  const rangeDates=deliveryDates.length?deliveryDates:leadDates;
+  if(!rangeDates.length)return;
   state.range="custom";
-  state.start=cloneDate(new Date(Math.min(...leadDates)));
-  state.end=cloneDate(webinarEnd);
+  state.start=cloneDate(new Date(Math.min(...rangeDates)));
+  state.end=cloneDate(deliveryDates.length?new Date(Math.max(...deliveryDates)):webinarEnd);
   updateDateTrigger();
+}
+function cohortCampaignKeys(rows){
+  const keys=new Set();
+  (rows||AD_ROWS.filter(row=>
+    state.funnel!=="all"&&state.webinar!=="all"&&
+    row.offer===state.funnel&&row.webinarDate instanceof Date&&!isNaN(row.webinarDate)&&
+    isoDate(row.webinarDate)===state.webinar&&
+    (state.source==="all"||row.platform===state.source)&&num(row.leads)>0
+  )).forEach(row=>{
+    if(row.campaignId)keys.add(row.platform+"\u001f"+row.campaignId);
+  });
+  return keys;
 }
 function populateFilters(){
   const sources=[...new Set(AD_ROWS.map(r=>r.platform))].filter(Boolean).sort();
@@ -825,13 +858,18 @@ function adRowInRange(row,start,end){
 }
 function filteredAdsFor(start,end){
   const shouldFilterSource=state.view==="marketing";
+  const campaignKeys=cohortCampaignKeys();
+  const campaignScoped=state.funnel!=="all"&&state.webinar!=="all"&&campaignKeys.size>0;
   return AD_ROWS.filter(row=>{
     const hasCohortMetric=!!(row.leads||row.uniq||row.sameDay||row.later||row.unknown||row.purchases||row.revenue||row.customerId);
+    const deliveryOnly=!!(row.spend||row.clicks)&&!hasCohortMetric;
     const funnelMatches=state.funnel==="all"||row.offer===state.funnel;
     const webinarMatches=state.webinar==="all"||(row.webinarDate instanceof Date&&!isNaN(row.webinarDate)&&isoDate(row.webinarDate)===state.webinar);
+    const campaignMatches=!deliveryOnly||!campaignScoped||campaignKeys.has(row.platform+"\u001f"+row.campaignId);
     return adRowInRange(row,start,end)
       &&(!shouldFilterSource||state.source==="all"||row.platform===state.source)
       &&(!hasCohortMetric||(funnelMatches&&webinarMatches))
+      &&campaignMatches
       &&searchHit(row);
   });
 }

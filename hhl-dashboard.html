@@ -272,7 +272,7 @@
       </div>
       <div class="field">
         <label for="webinarFilter">Webinar Date</label>
-        <select id="webinarFilter"><option value="all">All webinar dates</option></select>
+        <select id="webinarFilter" disabled><option value="all">Select a funnel first</option></select>
       </div>
       <div class="field date-stack">
         <label>Date Range</label>
@@ -743,16 +743,25 @@ function renderDpCalendar(targetId,year,month,showPrev){
   });
 }
 function populateWebinarFilter(){
+  const select=$("webinarFilter");
+  if(state.funnel==="all"){
+    state.webinar="all";
+    select.disabled=true;
+    select.innerHTML='<option value="all">Select a funnel first</option>';
+    select.value="all";
+    return;
+  }
   const webinarDates=[...new Set(AD_ROWS
-    .filter(row=>state.funnel==="all"||row.offer===state.funnel)
+    .filter(row=>row.offer===state.funnel)
     .map(row=>row.webinarDate instanceof Date&&!isNaN(row.webinarDate)?isoDate(row.webinarDate):"")
     .filter(Boolean))].sort().reverse();
   if(state.webinar!=="all"&&!webinarDates.includes(state.webinar))state.webinar="all";
-  $("webinarFilter").innerHTML='<option value="all">All webinar dates</option>'+webinarDates.map(value=>{
+  select.disabled=false;
+  select.innerHTML='<option value="all">All webinar dates</option>'+webinarDates.map(value=>{
     const label=parseDate(value).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
     return `<option value="${value}">${esc(label)}</option>`;
   }).join("");
-  $("webinarFilter").value=state.webinar;
+  select.value=state.webinar;
 }
 function populateFilters(){
   const sources=[...new Set(AD_ROWS.map(r=>r.platform))].filter(Boolean).sort();
@@ -882,7 +891,7 @@ function deltaText(cur,prev){
 }
 function dailySummary(ga,emb){
   const days=daysBetween();
-  const rows=days.map(d=>({d,sessions:0,users:0,views:0,engaged:0,quiz:0,spend:0,clicks:0,impressions:0,leads:0,uniq:0,purchases:0,revenue:0,sources:new Set(),pages:new Set(),contacts:new Set()}));
+  const rows=days.map(d=>({d,sessions:0,users:0,views:0,engaged:0,quiz:0,spend:0,clicks:0,impressions:0,leads:0,uniq:0,purchases:0,revenue:0,sources:new Set(),pages:new Set(),contacts:new Set(),customerIds:new Set()}));
   ga.forEach(r=>{
     const i=Math.round((gaDate(r)-state.start)/DAY);
     if(!rows[i])return;
@@ -910,26 +919,27 @@ function dailySummary(ga,emb){
       rows[deliveryIndex].leads+=row.leads||0;
     }
     const saleDate=row.customerSaleDate instanceof Date&&!isNaN(row.customerSaleDate)?row.customerSaleDate:row.date;
-    const hasLeadDate=row.customerLeadDate instanceof Date&&!isNaN(row.customerLeadDate);
-    const leadQualifies=!hasLeadDate||dateInRange(row.customerLeadDate);
     const customerIndex=Math.round((saleDate-state.start)/DAY);
     if(rows[customerIndex]){
       rows[customerIndex].purchases+=row.purchases||0;
       rows[customerIndex].revenue+=row.revenue||0;
-      if(leadQualifies)rows[customerIndex].uniq+=row.uniq||0;
+      if(row.customerId)rows[customerIndex].customerIds.add(row.customerId);
+      else rows[customerIndex].uniq+=row.uniq||0;
     }
   });
   return rows.map(r=>{
     const quiz=DEMO_MODE?Math.max(r.quiz,Math.round(r.clicks*.16)):r.quiz;
+    const uniq=r.customerIds.size+r.uniq;
     return {
     ...r,
+    uniq,
     quiz,
     cvr:r.sessions?quiz/r.sessions:0,
     engRate:r.sessions?r.engaged/r.sessions:0,
     cpl:r.leads?r.spend/r.leads:0,
     cpc:r.clicks?r.spend/r.clicks:0,
     ctr:r.impressions?r.clicks/r.impressions:0,
-    cac:r.uniq?r.spend/r.uniq:0,
+    cac:uniq?r.spend/uniq:0,
     optinRate:r.clicks?r.leads/r.clicks:0,
     startRate:r.clicks?quiz/r.clicks:0,
     funnelPurCvr:quiz?r.purchases/quiz:0,
@@ -1220,15 +1230,15 @@ function campaignRateClass(value,target=1){
 }
 function renderCampaignTable(){
   const map=new Map();
+  const totalCustomerIds=new Set();
+  let totalLegacyUniqueCustomers=0;
   filteredAds().forEach(row=>{
     const key=row.platform||"Unknown";
     const o=map.get(key)||{
       platform:row.platform,
-      spend:0,clicks:0,leads:0,uniq:0,purchases:0,revenue:0
+      spend:0,clicks:0,leads:0,uniq:0,purchases:0,revenue:0,customerIds:new Set()
     };
     const saleDate=row.customerSaleDate instanceof Date&&!isNaN(row.customerSaleDate)?row.customerSaleDate:row.date;
-    const hasLeadDate=row.customerLeadDate instanceof Date&&!isNaN(row.customerLeadDate);
-    const leadQualifies=!hasLeadDate||dateInRange(row.customerLeadDate);
     if(dateInRange(row.date)){
       o.spend+=row.spend||0;
       o.clicks+=row.clicks||0;
@@ -1237,14 +1247,22 @@ function renderCampaignTable(){
     if(dateInRange(saleDate)){
       o.purchases+=row.purchases||0;
       o.revenue+=row.revenue||0;
-      if(leadQualifies)o.uniq+=row.uniq||0;
+      if(row.customerId){
+        o.customerIds.add(row.customerId);
+        totalCustomerIds.add(row.customerId);
+      }else{
+        o.uniq+=row.uniq||0;
+        totalLegacyUniqueCustomers+=row.uniq||0;
+      }
     }
     map.set(key,o);
   });
+  map.forEach(o=>{o.uniq+=o.customerIds.size});
   const rows=[...map.values()].sort((a,b)=>b.spend-a.spend||b.leads-a.leads);
   const totals=rows.reduce((a,r)=>{
-    a.spend+=r.spend;a.clicks+=r.clicks;a.leads+=r.leads;a.uniq+=r.uniq;a.purchases+=r.purchases;a.revenue+=r.revenue;return a;
+    a.spend+=r.spend;a.clicks+=r.clicks;a.leads+=r.leads;a.purchases+=r.purchases;a.revenue+=r.revenue;return a;
   },{spend:0,clicks:0,leads:0,uniq:0,purchases:0,revenue:0});
+  totals.uniq=totalCustomerIds.size+totalLegacyUniqueCustomers;
   const metricRow=r=>{
     const optinRate=r.clicks?r.leads/r.clicks:0;
     const cpl=r.leads?r.spend/r.leads:null;
@@ -1325,6 +1343,7 @@ $("dpOverlay").addEventListener("keydown",event=>{if(event.key==="Escape")dpClos
 $("sourceFilter").addEventListener("change",()=>{state.source=$("sourceFilter").value;render()});
 $("pageFilter").addEventListener("change",()=>{
   state.funnel=$("pageFilter").value;
+  state.webinar="all";
   populateWebinarFilter();
   render();
 });

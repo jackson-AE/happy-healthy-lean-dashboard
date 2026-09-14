@@ -825,11 +825,15 @@ function adRowInRange(row,start,end){
 }
 function filteredAdsFor(start,end){
   const shouldFilterSource=state.view==="marketing";
-  return AD_ROWS.filter(row=>adRowInRange(row,start,end)
-    &&(!shouldFilterSource||state.source==="all"||row.platform===state.source)
-    &&(state.funnel==="all"||row.offer===state.funnel)
-    &&(state.webinar==="all"||(row.webinarDate instanceof Date&&!isNaN(row.webinarDate)&&isoDate(row.webinarDate)===state.webinar))
-    &&searchHit(row));
+  return AD_ROWS.filter(row=>{
+    const hasCohortMetric=!!(row.leads||row.uniq||row.sameDay||row.later||row.unknown||row.purchases||row.revenue||row.customerId);
+    const funnelMatches=state.funnel==="all"||row.offer===state.funnel;
+    const webinarMatches=state.webinar==="all"||(row.webinarDate instanceof Date&&!isNaN(row.webinarDate)&&isoDate(row.webinarDate)===state.webinar);
+    return adRowInRange(row,start,end)
+      &&(!shouldFilterSource||state.source==="all"||row.platform===state.source)
+      &&(!hasCohortMetric||(funnelMatches&&webinarMatches))
+      &&searchHit(row);
+  });
 }
 function filteredAds(){
   return filteredAdsFor(state.start,state.end);

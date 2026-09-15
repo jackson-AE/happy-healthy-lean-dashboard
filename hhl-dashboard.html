@@ -875,11 +875,18 @@ function filteredEmb(){
     &&(!gaPages||gaPages.has(embPage(r)))
     &&searchHit(r));
 }
+function salesMetricDate(row){
+  const saleDate=row.customerSaleDate instanceof Date&&!isNaN(row.customerSaleDate)?row.customerSaleDate:row.date;
+  if(state.webinar!=="all"&&row.webinarDate instanceof Date&&!isNaN(row.webinarDate)&&isoDate(row.webinarDate)===state.webinar){
+    return row.webinarDate;
+  }
+  return saleDate;
+}
 function adRowInRange(row,start,end){
   const hasDeliveryMetric=!!(row.spend||row.clicks||row.leads);
   const hasCustomerMetric=!!(row.uniq||row.sameDay||row.later||row.unknown);
   const hasPurchaseMetric=!!(row.purchases||row.revenue);
-  const saleDate=row.customerSaleDate instanceof Date&&!isNaN(row.customerSaleDate)?row.customerSaleDate:row.date;
+  const saleDate=salesMetricDate(row);
   const hasLeadDate=row.customerLeadDate instanceof Date&&!isNaN(row.customerLeadDate);
   const leadQualifies=!hasLeadDate||dateInRangeFor(row.customerLeadDate,start,end);
   return (hasDeliveryMetric&&dateInRangeFor(row.date,start,end))||
@@ -940,7 +947,7 @@ function summarizeAds(rows,start=state.start,end=state.end){
   const customerIds=new Set();
   let legacyUniqueCustomers=0;
   rows.forEach(row=>{
-    const saleDate=row.customerSaleDate instanceof Date&&!isNaN(row.customerSaleDate)?row.customerSaleDate:row.date;
+    const saleDate=salesMetricDate(row);
     if(dateInRangeFor(row.date,start,end)){
       summary.spend+=row.spend||0;
       summary.clicks+=row.clicks||0;
@@ -1009,7 +1016,7 @@ function dailySummary(ga,emb){
       rows[deliveryIndex].impressions+=row.impressions||((row.clicks||0)*20);
       rows[deliveryIndex].leads+=row.leads||0;
     }
-    const saleDate=row.customerSaleDate instanceof Date&&!isNaN(row.customerSaleDate)?row.customerSaleDate:row.date;
+    const saleDate=salesMetricDate(row);
     const customerIndex=Math.round((saleDate-state.start)/DAY);
     if(rows[customerIndex]){
       rows[customerIndex].purchases+=row.purchases||0;
@@ -1329,7 +1336,7 @@ function renderCampaignTable(){
       platform:row.platform,
       spend:0,clicks:0,leads:0,uniq:0,purchases:0,revenue:0,customerIds:new Set()
     };
-    const saleDate=row.customerSaleDate instanceof Date&&!isNaN(row.customerSaleDate)?row.customerSaleDate:row.date;
+    const saleDate=salesMetricDate(row);
     if(dateInRange(row.date)){
       o.spend+=row.spend||0;
       o.clicks+=row.clicks||0;

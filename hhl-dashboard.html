@@ -815,6 +815,25 @@ function selectedWebinarCampaignRange(){
   };
 }
 function applyWebinarDateRange(){
+  if(state.funnel!=="all"&&state.webinar==="all"){
+    const webinarDates=[...new Set(AD_ROWS
+      .filter(row=>row.offer===state.funnel)
+      .map(row=>row.webinarDate instanceof Date&&!isNaN(row.webinarDate)?isoDate(row.webinarDate):"")
+      .filter(Boolean))];
+    if(webinarDates.length===1){
+      const selectedValue=state.webinar;
+      state.webinar=webinarDates[0];
+      const onlyWebinarRange=selectedWebinarCampaignRange();
+      state.webinar=selectedValue;
+      if(onlyWebinarRange){
+        state.range="custom";
+        state.start=onlyWebinarRange.start;
+        state.end=onlyWebinarRange.end;
+        updateDateTrigger();
+        return;
+      }
+    }
+  }
   if(state.funnel==="all"||state.webinar==="all"){
     state.range="maximum";
     const fullRange=presetRange("maximum");

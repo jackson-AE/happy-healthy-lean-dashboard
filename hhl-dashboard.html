@@ -816,9 +816,9 @@ function applyWebinarDateRange(){
 function cohortCampaignKeys(rows){
   const keys=new Set();
   (rows||AD_ROWS.filter(row=>
-    state.funnel!=="all"&&state.webinar!=="all"&&
+    state.funnel!=="all"&&
     row.offer===state.funnel&&row.webinarDate instanceof Date&&!isNaN(row.webinarDate)&&
-    isoDate(row.webinarDate)===state.webinar&&
+    (state.webinar==="all"||isoDate(row.webinarDate)===state.webinar)&&
     (state.source==="all"||row.platform===state.source)&&num(row.leads)>0
   )).forEach(row=>{
     if(row.campaignId)keys.add(row.platform+"\u001f"+row.campaignId);
@@ -870,7 +870,7 @@ function adRowInRange(row,start,end){
 function filteredAdsFor(start,end){
   const shouldFilterSource=state.view==="marketing";
   const campaignKeys=cohortCampaignKeys();
-  const campaignScoped=state.funnel!=="all"&&state.webinar!=="all"&&campaignKeys.size>0;
+  const campaignScoped=state.funnel!=="all"&&campaignKeys.size>0;
   return AD_ROWS.filter(row=>{
     const hasCohortMetric=!!(row.leads||row.uniq||row.sameDay||row.later||row.unknown||row.purchases||row.revenue||row.customerId);
     const deliveryOnly=!!(row.spend||row.clicks)&&!hasCohortMetric;

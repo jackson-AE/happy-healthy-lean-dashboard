@@ -105,13 +105,14 @@
   .dp-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
   .dp-day{height:34px;display:grid;place-items:center;background:transparent;border:0;
     font-size:13px;font-weight:500;color:var(--ink);border-radius:8px;cursor:pointer;transition:.08s}
-  .dp-day:hover:not(.dp-empty):not(.dp-outside){background:var(--surface-2)}
+  .dp-day:hover:not(.dp-empty):not(.dp-outside):not(.dp-no-data){background:var(--surface-2)}
   .dp-day.dp-empty{cursor:default}
   .dp-day.dp-in-range{background:var(--sel);border-radius:0}
   .dp-day.dp-range-start{background:var(--brand);color:#fff;border-radius:8px 0 0 8px}
   .dp-day.dp-range-end{background:var(--brand);color:#fff;border-radius:0 8px 8px 0}
   .dp-day.dp-range-start.dp-range-end{border-radius:8px}
   .dp-day.dp-outside{color:var(--muted);opacity:.35;cursor:default}
+  .dp-day.dp-no-data{color:var(--muted);background:transparent;opacity:.28;cursor:not-allowed}
   .dp-day.dp-today{font-weight:800;color:var(--brand)}
   .dp-day.dp-today.dp-range-start,.dp-day.dp-today.dp-range-end{color:#fff}
   .dp-footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:14px 26px;border-top:1px solid var(--border)}
@@ -621,7 +622,10 @@ function setBounds(){
 }
 function presetRange(preset){
   if(!BOUNDS.min||!BOUNDS.max)return null;
-  const today=cloneDate(BOUNDS.max), d=days=>new Date(today.getTime()-days*DAY);
+  const availableBounds=activeDateBounds();
+  const minDate=availableBounds.min||BOUNDS.min;
+  const maxDate=availableBounds.max||BOUNDS.max;
+  const today=cloneDate(maxDate), d=days=>new Date(today.getTime()-days*DAY);
   let start,end;
   if(preset==="today"){start=cloneDate(today);end=cloneDate(today)}
   else if(preset==="yesterday"){start=d(1);end=d(1)}
@@ -633,11 +637,11 @@ function presetRange(preset){
   else if(preset==="last_week"){const dow=today.getDay();start=d(dow+7);end=d(dow+1)}
   else if(preset==="this_month"){start=new Date(today.getFullYear(),today.getMonth(),1);end=cloneDate(today)}
   else if(preset==="last_month"){start=new Date(today.getFullYear(),today.getMonth()-1,1);end=new Date(today.getFullYear(),today.getMonth(),0)}
-  else if(preset==="maximum"){start=cloneDate(BOUNDS.min);end=cloneDate(BOUNDS.max)}
+  else if(preset==="maximum"){start=cloneDate(minDate);end=cloneDate(maxDate)}
   else return null;
-  if(start<BOUNDS.min)start.setTime(+BOUNDS.min);
-  if(end>BOUNDS.max)end.setTime(+BOUNDS.max);
-  if(end<BOUNDS.min)end.setTime(+BOUNDS.min);
+  if(start<minDate)start.setTime(+minDate);
+  if(end>maxDate)end.setTime(+maxDate);
+  if(end<minDate)end.setTime(+minDate);
   return {start,end};
 }
 function applyPreset(){
@@ -658,6 +662,24 @@ function updateDateTrigger(){
 function dateIsOutside(date){
   return (BOUNDS.min&&date<BOUNDS.min)||(BOUNDS.max&&date>BOUNDS.max);
 }
+function availableDateKeys(){
+  const dates=new Set();
+  const campaignKeys=cohortCampaignKeys();
+  AD_ROWS.forEach(row=>{
+    if(!adRowMatchesSelection(row,campaignKeys))return;
+    if((row.spend||row.clicks||row.leads)&&row.date instanceof Date&&!isNaN(row.date))dates.add(isoDate(row.date));
+    const saleDate=row.customerSaleDate instanceof Date&&!isNaN(row.customerSaleDate)?row.customerSaleDate:row.date;
+    if((row.uniq||row.sameDay||row.later||row.unknown||row.purchases||row.revenue)&&saleDate instanceof Date&&!isNaN(saleDate))dates.add(isoDate(saleDate));
+  });
+  return dates;
+}
+function activeDateBounds(){
+  const dates=[...availableDateKeys()].sort();
+  return dates.length?{min:parseDate(dates[0]),max:parseDate(dates[dates.length-1])}:BOUNDS;
+}
+function dateHasAvailableData(date,availableDates){
+  return !dateIsOutside(date)&&(availableDates||availableDateKeys()).has(isoDate(date));
+}
 function monthKey(date){
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`;
 }
@@ -674,7 +696,7 @@ function chooseDpPreset(preset){
 }
 function chooseDpDay(value){
   const date=parseDate(value);
-  if(!date||dateIsOutside(date))return;
+  if(!date||!dateHasAvailableData(date))return;
   if(!dp.picking||!dp.selStart||date<dp.selStart){
     dp.selStart=date;dp.selEnd=date;dp.picking=true;
   }else{
@@ -701,10 +723,11 @@ function dpClose(){
   $("dpTrigger").setAttribute("aria-expanded","false");
 }
 function dpRender(){
+  const availableDates=availableDateKeys();
   renderDpPresets();
-  renderDpCalendar("dpCalL",dp.leftYear,dp.leftMonth,true);
+  renderDpCalendar("dpCalL",dp.leftYear,dp.leftMonth,true,availableDates);
   const right=new Date(dp.leftYear,dp.leftMonth+1,1);
-  renderDpCalendar("dpCalR",right.getFullYear(),right.getMonth(),false);
+  renderDpCalendar("dpCalR",right.getFullYear(),right.getMonth(),false,availableDates);
   $("dpDateInfo").textContent=dp.selStart&&dp.selEnd ? fullRangeLabel(dp.selStart,dp.selEnd) : "Select a date range";
 }
 function renderDpPresets(){
@@ -716,7 +739,7 @@ function renderDpPresets(){
     button.addEventListener("click",()=>chooseDpPreset(button.dataset.preset));
   });
 }
-function renderDpCalendar(targetId,year,month,showPrev){
+function renderDpCalendar(targetId,year,month,showPrev,availableDates){
   const first=new Date(year,month,1);
   const daysInMonth=new Date(year,month+1,0).getDate();
   const blanks=first.getDay();
@@ -727,6 +750,7 @@ function renderDpCalendar(targetId,year,month,showPrev){
     const date=new Date(year,month,day);
     const iso=isoDate(date);
     const outside=dateIsOutside(date);
+    const noData=!outside&&!dateHasAvailableData(date,availableDates);
     let cls="dp-day";
     if(dp.selStart&&dp.selEnd){
       const t=+date,s=+dp.selStart,e=+dp.selEnd;
@@ -736,7 +760,8 @@ function renderDpCalendar(targetId,year,month,showPrev){
     }
     if(iso===todayIso)cls+=" dp-today";
     if(outside)cls+=" dp-outside";
-    cells+=`<button class="${cls}" type="button" data-date="${iso}" ${outside?"disabled":""}>${day}</button>`;
+    if(noData)cls+=" dp-no-data";
+    cells+=`<button class="${cls}" type="button" data-date="${iso}" ${outside||noData?"disabled":""} ${noData?'title="No data for the current filters" aria-label="'+iso+' — no data"':""}>${day}</button>`;
   }
   $(targetId).innerHTML=`
     <div class="dp-cal-nav">
@@ -876,22 +901,23 @@ function adRowInRange(row,start,end){
     (hasCustomerMetric&&dateInRangeFor(saleDate,start,end)&&leadQualifies)||
     (hasPurchaseMetric&&dateInRangeFor(saleDate,start,end));
 }
-function filteredAdsFor(start,end){
+function adRowMatchesSelection(row,campaignKeys){
   const shouldFilterSource=state.view==="marketing";
+  const keys=campaignKeys||cohortCampaignKeys();
+  const campaignScoped=state.funnel!=="all"&&keys.size>0;
+  const hasCohortMetric=!!(row.leads||row.uniq||row.sameDay||row.later||row.unknown||row.purchases||row.revenue||row.customerId);
+  const deliveryOnly=!!(row.spend||row.clicks)&&!hasCohortMetric;
+  const funnelMatches=state.funnel==="all"||row.offer===state.funnel;
+  const webinarMatches=state.webinar==="all"||(row.webinarDate instanceof Date&&!isNaN(row.webinarDate)&&isoDate(row.webinarDate)===state.webinar);
+  const campaignMatches=!deliveryOnly||!campaignScoped||keys.has(row.platform+"\u001f"+row.campaignId);
+  return (!shouldFilterSource||state.source==="all"||row.platform===state.source)
+    &&(!hasCohortMetric||(funnelMatches&&webinarMatches))
+    &&campaignMatches
+    &&searchHit(row);
+}
+function filteredAdsFor(start,end){
   const campaignKeys=cohortCampaignKeys();
-  const campaignScoped=state.funnel!=="all"&&campaignKeys.size>0;
-  return AD_ROWS.filter(row=>{
-    const hasCohortMetric=!!(row.leads||row.uniq||row.sameDay||row.later||row.unknown||row.purchases||row.revenue||row.customerId);
-    const deliveryOnly=!!(row.spend||row.clicks)&&!hasCohortMetric;
-    const funnelMatches=state.funnel==="all"||row.offer===state.funnel;
-    const webinarMatches=state.webinar==="all"||(row.webinarDate instanceof Date&&!isNaN(row.webinarDate)&&isoDate(row.webinarDate)===state.webinar);
-    const campaignMatches=!deliveryOnly||!campaignScoped||campaignKeys.has(row.platform+"\u001f"+row.campaignId);
-    return adRowInRange(row,start,end)
-      &&(!shouldFilterSource||state.source==="all"||row.platform===state.source)
-      &&(!hasCohortMetric||(funnelMatches&&webinarMatches))
-      &&campaignMatches
-      &&searchHit(row);
-  });
+  return AD_ROWS.filter(row=>adRowInRange(row,start,end)&&adRowMatchesSelection(row,campaignKeys));
 }
 function filteredAds(){
   return filteredAdsFor(state.start,state.end);

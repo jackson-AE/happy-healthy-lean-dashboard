@@ -776,7 +776,16 @@ function populateWebinarFilter(){
   select.value=state.webinar;
 }
 function applyWebinarDateRange(){
-  if(state.funnel==="all"||state.webinar==="all")return;
+  if(state.funnel==="all"||state.webinar==="all"){
+    state.range="maximum";
+    const fullRange=presetRange("maximum");
+    if(fullRange){
+      state.start=fullRange.start;
+      state.end=fullRange.end;
+    }
+    updateDateTrigger();
+    return;
+  }
   const webinarEnd=parseDate(state.webinar);
   if(!webinarEnd)return;
   const cohortRows=AD_ROWS.filter(row=>
@@ -1420,6 +1429,7 @@ $("pageFilter").addEventListener("change",()=>{
   state.funnel=$("pageFilter").value;
   state.webinar="all";
   populateWebinarFilter();
+  applyWebinarDateRange();
   render();
 });
 $("webinarFilter").addEventListener("change",()=>{

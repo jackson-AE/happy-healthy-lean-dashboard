@@ -279,7 +279,7 @@
         <div class="date-line">
           <button class="dp-trigger" id="dpTrigger" type="button" aria-haspopup="dialog" aria-expanded="false">
             <svg class="dp-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="12" rx="2"/><path d="M1.5 6.5h13M5 1v3M11 1v3"/></svg>
-            <span id="dpTriggerLabel">Last 7 days</span>
+            <span id="dpTriggerLabel">Maximum</span>
             <svg class="dp-caret" viewBox="0 0 12 12"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
@@ -350,7 +350,7 @@ const CONFIG={
   ]
 };
 let GA_ROWS=[],EMB_ROWS=[],AD_ROWS=[],DATA_TS="",BOUNDS={min:null,max:null},DEMO_MODE=false;
-const state={view:"marketing",range:"last_7",start:null,end:null,source:"all",funnel:"all",webinar:"all",page:"all",search:"",selectedMetric:"pageVisits"};
+const state={view:"marketing",range:"maximum",start:null,end:null,source:"all",funnel:"all",webinar:"all",page:"all",search:"",selectedMetric:"pageVisits"};
 const DP_PRESETS=[
   {id:"today",label:"Today"},
   {id:"yesterday",label:"Yesterday"},
@@ -365,7 +365,7 @@ const DP_PRESETS=[
   {id:"maximum",label:"Maximum"}
 ];
 const MONTH_NAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
-const dp={selStart:null,selEnd:null,preset:"last_7",leftMonth:0,leftYear:2026,picking:false};
+const dp={selStart:null,selEnd:null,preset:"maximum",leftMonth:0,leftYear:2026,picking:false};
 
 const demoGa=[
   ["2026-08-01","/glp1-weight-loss",214,188,257,142,"facebook / paid","AE - TRT $79 Survey (/starttoday) - PMD Purch - ABO - Relaunch 08.02","mobile"],
@@ -423,6 +423,17 @@ function parseDate(value){
   if(!value)return null;
   if(value instanceof Date&&!isNaN(value))return new Date(value.getFullYear(),value.getMonth(),value.getDate());
   const s=String(value).trim();
+  // Apps Script can serialize a numeric Google Sheets date as a five-digit
+  // "year" (for example 46199-01-01). Treat that prefix as the sheet serial.
+  const malformedSerialDate=s.match(/^(\d{5})(?:-01-01)(?:T.*)?$/);
+  if(malformedSerialDate){
+    const serial=Number(malformedSerialDate[1]);
+    if(serial>20000&&serial<80000){
+      const utcMs=Math.round((serial-25569)*DAY);
+      const d=new Date(utcMs);
+      return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());
+    }
+  }
   if(/^\d+(\.\d+)?$/.test(s)){
     const serial=Number(s);
     if(serial>20000&&serial<80000){

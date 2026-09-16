@@ -346,7 +346,8 @@ const CONFIG={
     {key:"Facebook",aliases:["facebook","fb","meta","instagram","ig"]},
     {key:"Google",aliases:["google","youtube","yt"]},
     {key:"Bing",aliases:["bing","microsoft","ms ads"]},
-    {key:"Organic",aliases:["organic","website","direct","email"]},
+    {key:"Organic",aliases:["organic","website","direct"]},
+    {key:"Email",aliases:["email"]},
   ]
 };
 let GA_ROWS=[],EMB_ROWS=[],AD_ROWS=[],DATA_TS="",BOUNDS={min:null,max:null},DEMO_MODE=false;
@@ -512,6 +513,7 @@ function platformColor(source){
   if(s==="Google")return "#f97316";
   if(s==="Bing")return "#10b981";
   if(s==="Organic")return "#8b5cf6";
+  if(s==="Email")return "#ec4899";
   if(s==="Affiliate")return "#eab308";
   return "#22d3ee";
 }

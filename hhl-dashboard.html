@@ -542,6 +542,7 @@ function mapAdRows(rows){
       unknown:num(row["Unknown Customer"]||row["Unattributed Sales"]),
       purchases:num(row.Purchase||row.Orders),
       revenue:num(row.Revenue),
+      otoRevenue:num(row["OTO Revenue"])||(num(row.Purchase||row.Orders)?num(row.Revenue):0),
       customerId:String(row["Contact ID"]||"").trim(),
       customerSaleDate:saleDate,
       customerLeadDate:leadDate
@@ -582,7 +583,8 @@ function demoAds(){
         later:uniq&&index%2?uniq:0,
         unknown:0,
         purchases,
-        revenue:purchases*item.rev
+        revenue:purchases*item.rev,
+        otoRevenue:purchases*item.rev
       });
     });
   }
@@ -998,7 +1000,7 @@ function filteredEmbFor(start,end){
     &&searchHit(r));
 }
 function summarizeAds(rows,start=state.start,end=state.end){
-  const summary={spend:0,clicks:0,impressions:0,leads:0,uniq:0,purchases:0,revenue:0};
+  const summary={spend:0,clicks:0,impressions:0,leads:0,uniq:0,purchases:0,revenue:0,otoRevenue:0};
   const customerIds=new Set();
   let legacyUniqueCustomers=0;
   rows.forEach(row=>{
@@ -1016,6 +1018,7 @@ function summarizeAds(rows,start=state.start,end=state.end){
     if(dateInRangeFor(saleDate,start,end)){
       summary.purchases+=row.purchases||0;
       summary.revenue+=row.revenue||0;
+      summary.otoRevenue+=row.otoRevenue||0;
     }
   });
   summary.uniq=customerIds.size+legacyUniqueCustomers;
@@ -1257,7 +1260,7 @@ function renderSummary(ga,emb){
     {key:"cpc",tone:"cpc",icon:"CPC",label:"CPC",value:ad.cpc==null?"-":money2(ad.cpc),delta:deltaText(ad.cpc||0,pad.cpc||0),color:"#6366f1",series:daily.map(x=>x.cpc),format:money2},
     {key:"funnelStarts",tone:"funnel",icon:"FS",label:"Funnel Starts",value:fmt(ad.funnelStarts),delta:"Start Rate "+pct2(ad.startRate||0),color:"#3b82f6",series:daily.map(x=>x.quiz),format:fmt},
     {key:"funnelPurCvr",tone:"cvr",icon:"CVR",label:"Funnel OTO CVR",value:ad.funnelPurCvr==null?"-":pct(ad.funnelPurCvr),delta:deltaText(ad.funnelPurCvr||0,pad.funnelPurCvr||0),color:"#06b6d4",series:daily.map(x=>x.funnelPurCvr),format:pct,adaptive:true},
-    {key:"orders",tone:"leadclose",icon:"O",label:"OTO",value:fmt(ad.purchases),delta:deltaText(ad.purchases,pad.purchases),color:"#06b6d4",series:daily.map(x=>x.purchases),format:fmt},
+    {key:"orders",tone:"leadclose",icon:"O",label:"OTO",value:fmt(ad.purchases),delta:"OTO Rev "+money2(ad.otoRevenue),color:"#06b6d4",series:daily.map(x=>x.purchases),format:fmt},
     {key:"revenue",tone:"aov",icon:"REV",label:"Revenue",value:money2(ad.revenue),delta:deltaText(ad.revenue,pad.revenue),color:"#22c55e",series:daily.map(x=>x.revenue),format:money2},
     {key:"roas",tone:"roas",icon:"R",label:"ROAS",value:ad.roas==null?"-":roas2(ad.roas),delta:deltaText(ad.roas||0,pad.roas||0),color:"#a3e635",series:daily.map(x=>x.roas),format:roas2,adaptive:true},
   ];
@@ -1269,7 +1272,7 @@ function renderSummary(ga,emb){
     {key:"startRate",tone:"cpl",icon:"SR",label:"Start Rate",value:ad.startRate==null?"-":pct2(ad.startRate),delta:deltaText(ad.startRate||0,pad.startRate||0),color:"#3b82f6",series:daily.map(x=>x.startRate),format:pct2,adaptive:true},
     {key:"funnelLeads",tone:"unique",icon:"L",label:"Leads",value:fmt(ad.leads),delta:"Optin Rate "+pct2(funnelOptinRate),color:"#06b6d4",series:daily.map(x=>x.leads),format:fmt},
     {key:"optinRate",tone:"cac",icon:"OR",label:"Optin Rate",value:pct2(funnelOptinRate),delta:deltaText(funnelOptinRate,prevFunnelOptinRate),color:"#14b8a6",series:daily.map(x=>x.quiz?x.leads/x.quiz:0),format:pct2,adaptive:true},
-    {key:"funnelPurchase",tone:"clicks",icon:"O",label:"OTO",value:fmt(ad.purchases),delta:deltaText(ad.purchases,pad.purchases),color:"#8b5cf6",series:daily.map(x=>x.purchases),format:fmt},
+    {key:"funnelPurchase",tone:"clicks",icon:"O",label:"OTO",value:fmt(ad.purchases),delta:"OTO Rev "+money2(ad.otoRevenue),color:"#8b5cf6",series:daily.map(x=>x.purchases),format:fmt},
     {key:"funnelPurCvr",tone:"cvr",icon:"CVR",label:"Funnel OTO CVR",value:ad.funnelPurCvr==null?"-":pct(ad.funnelPurCvr),delta:deltaText(ad.funnelPurCvr||0,pad.funnelPurCvr||0),color:"#06b6d4",series:daily.map(x=>x.funnelPurCvr),format:pct,adaptive:true},
     {key:"aov",tone:"close",icon:"AOV",label:"AOV",value:ad.aov==null?"-":money2(ad.aov),delta:deltaText(ad.aov||0,pad.aov||0),color:"#a3e635",series:daily.map(x=>x.uniq?ad.aov||0:0),format:money2},
   ];

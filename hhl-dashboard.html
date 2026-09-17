@@ -460,7 +460,12 @@ function mapPlatform(value){
   const source=String(value||"").toLowerCase();
   if(!source)return "Unknown";
   for(const platform of CONFIG.platforms){
-    if(source===platform.key.toLowerCase()||platform.aliases.some(alias=>source===alias||source.includes(alias)))return platform.key;
+    const aliasMatches=platform.aliases.some(alias=>{
+      if(source===alias)return true;
+      if(alias.length>2)return source.includes(alias);
+      return new RegExp(`(^|[^a-z0-9])${alias}([^a-z0-9]|$)`).test(source);
+    });
+    if(source===platform.key.toLowerCase()||aliasMatches)return platform.key;
   }
   return "Other";
 }

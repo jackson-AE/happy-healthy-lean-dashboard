@@ -1317,7 +1317,7 @@ function renderSummary(ga,emb){
         <div class="summary-card-icon">${card.icon}</div>
         <div class="summary-card-label">${card.label}</div>
         <div class="summary-card-value">${card.value}</div>
-        ${(!card.percentBadge||showWebinarPercentages)&&card.delta?`<div class="summary-card-sub">${card.delta}</div>`:""}
+        ${(["uniq","orders","funnelPurchase"].includes(card.key)&&card.delta)?`<div class="summary-card-sub">${card.delta}</div>`:""}
       </div>
       <div class="summary-card-spark" id="summary_${card.key}"></div>
     </article>`).join("");

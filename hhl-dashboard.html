@@ -1258,7 +1258,7 @@ function renderSummary(ga,emb){
     {key:"spend",tone:"spend",icon:"$",label:"Spend",value:money2(ad.spend),delta:deltaText(ad.spend,pad.spend),color:"#8b5cf6",series:daily.map(x=>x.spend),format:money2},
     {key:"leads",tone:"leads",icon:"L",label:"Leads",value:fmt(ad.leads),delta:"Optin Rate "+pct2(ad.leads&&ad.clicks?ad.leads/ad.clicks:0),color:"#6366f1",series:daily.map(x=>x.leads),format:fmt},
     {key:"cpl",tone:"cpl",icon:"CPL",label:"CPL",value:ad.cpl==null?"-":money2(ad.cpl),delta:deltaText(ad.cpl||0,pad.cpl||0),color:"#3b82f6",series:daily.map(x=>x.cpl),format:money2},
-    {key:"uniq",tone:"unique",icon:"P",label:"Purchases",value:fmt(ad.uniq),delta:deltaText(ad.uniq,pad.uniq),color:"#06b6d4",series:daily.map(x=>x.uniq),format:fmt},
+    {key:"uniq",tone:"unique",icon:"P",label:"Purchases",value:fmt(ad.uniq),delta:money2(Math.max(0,ad.revenue-ad.otoRevenue)),color:"#06b6d4",series:daily.map(x=>x.uniq),format:fmt},
     {key:"cac",tone:"cac",icon:"CAC",label:"CAC",value:ad.cac==null?"-":money2(ad.cac),delta:deltaText(ad.cac||0,pad.cac||0),color:"#14b8a6",series:daily.map(x=>x.cac),format:money2},
     {key:"clicks",tone:"clicks",icon:"CL",label:"Clicks",value:fmt(ad.clicks),delta:"CTR "+pct2(ad.ctr||0),color:"#8b5cf6",series:daily.map(x=>x.clicks),format:fmt},
     {key:"cpc",tone:"cpc",icon:"CPC",label:"CPC",value:ad.cpc==null?"-":money2(ad.cpc),delta:deltaText(ad.cpc||0,pad.cpc||0),color:"#6366f1",series:daily.map(x=>x.cpc),format:money2},

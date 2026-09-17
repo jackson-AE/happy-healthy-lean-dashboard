@@ -1012,7 +1012,7 @@ function summarizeAds(rows,start=state.start,end=state.end){
     if(dateInRangeFor(row.date,start,end)){
       summary.spend+=row.spend||0;
       summary.clicks+=row.clicks||0;
-      summary.impressions+=row.impressions||((row.clicks||0)*20);
+      summary.impressions+=row.impressions||0;
       summary.leads+=row.leads||0;
     }
     if(dateInRangeFor(saleDate,start,end)){
@@ -1045,7 +1045,7 @@ function previousBounds(){
   return {start:prevStart,end:prevEnd};
 }
 function deltaText(cur,prev){
-  if(!prev)return "+0.0%";
+  if(prev==null||!Number.isFinite(prev)||prev===0)return "—";
   const change=(cur-prev)/prev*100;
   return (change>=0?"+":"")+change.toFixed(1)+"%";
 }
@@ -1075,7 +1075,7 @@ function dailySummary(ga,emb){
     if(rows[deliveryIndex]){
       rows[deliveryIndex].spend+=row.spend||0;
       rows[deliveryIndex].clicks+=row.clicks||0;
-      rows[deliveryIndex].impressions+=row.impressions||((row.clicks||0)*20);
+      rows[deliveryIndex].impressions+=row.impressions||0;
       rows[deliveryIndex].leads+=row.leads||0;
     }
     const saleDate=salesMetricDate(row);
@@ -1238,6 +1238,29 @@ function renderFunnelAnalytics(ga,emb){
     </button>`).join("");
   bigFunnelChart("funnelMainChart",selected);
 }
+function previousSelectedWebinarContext(){
+  if(state.source==="all"||state.funnel==="all"||state.webinar==="all")return null;
+  const webinarDates=[...new Set(AD_ROWS.filter(row=>
+    row.platform===state.source&&row.offer===state.funnel&&
+    row.webinarDate instanceof Date&&!isNaN(row.webinarDate)
+  ).map(row=>isoDate(row.webinarDate)))].sort();
+  const currentIndex=webinarDates.indexOf(state.webinar);
+  if(currentIndex<=0)return null;
+
+  const currentWebinar=state.webinar;
+  state.webinar=webinarDates[currentIndex-1];
+  try{
+    const range=selectedWebinarCampaignRange();
+    if(!range)return null;
+    return {
+      ads:summarizeAds(filteredAdsFor(range.start,range.end),range.start,range.end),
+      ga:filteredGaFor(range.start,range.end),
+      emb:filteredEmbFor(range.start,range.end)
+    };
+  }finally{
+    state.webinar=currentWebinar;
+  }
+}
 function renderSummary(ga,emb){
   const s=summarize(ga,emb);
   const ad=summarizeAds(filteredAds());
@@ -1245,9 +1268,15 @@ function renderSummary(ga,emb){
   ad.funnelStarts=funnelStarts;
   ad.startRate=ad.clicks?funnelStarts/ad.clicks:null;
   ad.funnelPurCvr=funnelStarts?ad.purchases/funnelStarts:null;
+  const showWebinarPercentages=state.source!=="all"&&state.funnel!=="all"&&state.webinar!=="all";
+  const previousWebinar=showWebinarPercentages?previousSelectedWebinarContext():null;
   const prev=previousBounds();
-  const ps=summarize(filteredGaFor(prev.start,prev.end),filteredEmbFor(prev.start,prev.end));
-  const pad=summarizeAds(filteredAdsFor(prev.start,prev.end),prev.start,prev.end);
+  const ps=showWebinarPercentages
+    ?summarize(previousWebinar?previousWebinar.ga:[],previousWebinar?previousWebinar.emb:[])
+    :summarize(filteredGaFor(prev.start,prev.end),filteredEmbFor(prev.start,prev.end));
+  const pad=showWebinarPercentages
+    ?(previousWebinar?previousWebinar.ads:summarizeAds([],prev.start,prev.end))
+    :summarizeAds(filteredAdsFor(prev.start,prev.end),prev.start,prev.end);
   const prevFunnelStarts=DEMO_MODE?Math.max(ps.quiz,Math.round(pad.clicks*.16)):ps.quiz;
   pad.funnelStarts=prevFunnelStarts;
   pad.startRate=pad.clicks?prevFunnelStarts/pad.clicks:null;
@@ -1255,30 +1284,30 @@ function renderSummary(ga,emb){
   const daily=dailySummary(ga,emb);
   const dates=daily.map(x=>shortDate(x.d));
   const allCards=[
-    {key:"spend",tone:"spend",icon:"$",label:"Spend",value:money2(ad.spend),delta:deltaText(ad.spend,pad.spend),color:"#8b5cf6",series:daily.map(x=>x.spend),format:money2},
-    {key:"leads",tone:"leads",icon:"L",label:"Leads",value:fmt(ad.leads),delta:"Optin Rate "+pct2(ad.leads&&ad.clicks?ad.leads/ad.clicks:0),color:"#6366f1",series:daily.map(x=>x.leads),format:fmt},
-    {key:"cpl",tone:"cpl",icon:"CPL",label:"CPL",value:ad.cpl==null?"-":money2(ad.cpl),delta:deltaText(ad.cpl||0,pad.cpl||0),color:"#3b82f6",series:daily.map(x=>x.cpl),format:money2},
+    {key:"spend",tone:"spend",icon:"$",label:"Spend",value:money2(ad.spend),delta:deltaText(ad.spend,pad.spend),percentBadge:true,color:"#8b5cf6",series:daily.map(x=>x.spend),format:money2},
+    {key:"leads",tone:"leads",icon:"L",label:"Leads",value:fmt(ad.leads),delta:"Optin Rate "+pct2(ad.leads&&ad.clicks?ad.leads/ad.clicks:0),percentBadge:true,color:"#6366f1",series:daily.map(x=>x.leads),format:fmt},
+    {key:"cpl",tone:"cpl",icon:"CPL",label:"CPL",value:ad.cpl==null?"-":money2(ad.cpl),delta:deltaText(ad.cpl,pad.cpl),percentBadge:true,color:"#3b82f6",series:daily.map(x=>x.cpl),format:money2},
     {key:"uniq",tone:"unique",icon:"P",label:"Purchases",value:fmt(ad.uniq),delta:money2(Math.max(0,ad.revenue-ad.otoRevenue)),color:"#06b6d4",series:daily.map(x=>x.uniq),format:fmt},
-    {key:"cac",tone:"cac",icon:"CAC",label:"CAC",value:ad.cac==null?"-":money2(ad.cac),delta:deltaText(ad.cac||0,pad.cac||0),color:"#14b8a6",series:daily.map(x=>x.cac),format:money2},
-    {key:"clicks",tone:"clicks",icon:"CL",label:"Clicks",value:fmt(ad.clicks),delta:"CTR "+pct2(ad.ctr||0),color:"#8b5cf6",series:daily.map(x=>x.clicks),format:fmt},
-    {key:"cpc",tone:"cpc",icon:"CPC",label:"CPC",value:ad.cpc==null?"-":money2(ad.cpc),delta:deltaText(ad.cpc||0,pad.cpc||0),color:"#6366f1",series:daily.map(x=>x.cpc),format:money2},
+    {key:"cac",tone:"cac",icon:"CAC",label:"CAC",value:ad.cac==null?"-":money2(ad.cac),delta:deltaText(ad.cac,pad.cac),percentBadge:true,color:"#14b8a6",series:daily.map(x=>x.cac),format:money2},
+    {key:"clicks",tone:"clicks",icon:"CL",label:"Clicks",value:fmt(ad.clicks),delta:ad.ctr==null?"":"CTR "+pct2(ad.ctr),percentBadge:true,color:"#8b5cf6",series:daily.map(x=>x.clicks),format:fmt},
+    {key:"cpc",tone:"cpc",icon:"CPC",label:"CPC",value:ad.cpc==null?"-":money2(ad.cpc),delta:deltaText(ad.cpc,pad.cpc),percentBadge:true,color:"#6366f1",series:daily.map(x=>x.cpc),format:money2},
     {key:"funnelStarts",tone:"funnel",icon:"FS",label:"Funnel Starts",value:fmt(ad.funnelStarts),delta:"Start Rate "+pct2(ad.startRate||0),color:"#3b82f6",series:daily.map(x=>x.quiz),format:fmt},
     {key:"funnelPurCvr",tone:"cvr",icon:"CVR",label:"Funnel OTO CVR",value:ad.funnelPurCvr==null?"-":pct(ad.funnelPurCvr),delta:deltaText(ad.funnelPurCvr||0,pad.funnelPurCvr||0),color:"#06b6d4",series:daily.map(x=>x.funnelPurCvr),format:pct,adaptive:true},
     {key:"orders",tone:"leadclose",icon:"O",label:"OTO",value:fmt(ad.purchases),delta:money2(ad.otoRevenue),color:"#06b6d4",series:daily.map(x=>x.purchases),format:fmt},
-    {key:"revenue",tone:"aov",icon:"REV",label:"Revenue",value:money2(ad.revenue),delta:deltaText(ad.revenue,pad.revenue),color:"#22c55e",series:daily.map(x=>x.revenue),format:money2},
-    {key:"roas",tone:"roas",icon:"R",label:"ROAS",value:ad.roas==null?"-":roas2(ad.roas),delta:deltaText(ad.roas||0,pad.roas||0),color:"#a3e635",series:daily.map(x=>x.roas),format:roas2,adaptive:true},
+    {key:"revenue",tone:"aov",icon:"REV",label:"Revenue",value:money2(ad.revenue),delta:deltaText(ad.revenue,pad.revenue),percentBadge:true,color:"#22c55e",series:daily.map(x=>x.revenue),format:money2},
+    {key:"roas",tone:"roas",icon:"R",label:"ROAS",value:ad.roas==null?"-":roas2(ad.roas),delta:deltaText(ad.roas,pad.roas),percentBadge:true,color:"#a3e635",series:daily.map(x=>x.roas),format:roas2,adaptive:true},
   ];
   const funnelOptinRate=ad.funnelStarts&&ad.leads?ad.leads/ad.funnelStarts:0;
   const prevFunnelOptinRate=pad.funnelStarts&&pad.leads?pad.leads/pad.funnelStarts:0;
   const funnelCards=[
-    {key:"pageVisits",tone:"spend",icon:"PV",label:"Page Visits",value:fmt(s.sessions),delta:deltaText(s.sessions,ps.sessions),color:"#8b5cf6",series:daily.map(x=>x.sessions),format:fmt},
-    {key:"funnelStarts",tone:"leads",icon:"FS",label:"Funnel Starts",value:fmt(ad.funnelStarts),delta:"Start Rate "+pct2(ad.startRate||0),color:"#6366f1",series:daily.map(x=>x.quiz),format:fmt},
-    {key:"startRate",tone:"cpl",icon:"SR",label:"Start Rate",value:ad.startRate==null?"-":pct2(ad.startRate),delta:deltaText(ad.startRate||0,pad.startRate||0),color:"#3b82f6",series:daily.map(x=>x.startRate),format:pct2,adaptive:true},
-    {key:"funnelLeads",tone:"unique",icon:"L",label:"Leads",value:fmt(ad.leads),delta:"Optin Rate "+pct2(funnelOptinRate),color:"#06b6d4",series:daily.map(x=>x.leads),format:fmt},
-    {key:"optinRate",tone:"cac",icon:"OR",label:"Optin Rate",value:pct2(funnelOptinRate),delta:deltaText(funnelOptinRate,prevFunnelOptinRate),color:"#14b8a6",series:daily.map(x=>x.quiz?x.leads/x.quiz:0),format:pct2,adaptive:true},
+    {key:"pageVisits",tone:"spend",icon:"PV",label:"Page Visits",value:fmt(s.sessions),delta:deltaText(s.sessions,ps.sessions),percentBadge:true,color:"#8b5cf6",series:daily.map(x=>x.sessions),format:fmt},
+    {key:"funnelStarts",tone:"leads",icon:"FS",label:"Funnel Starts",value:fmt(ad.funnelStarts),delta:"Start Rate "+pct2(ad.startRate||0),percentBadge:true,color:"#6366f1",series:daily.map(x=>x.quiz),format:fmt},
+    {key:"startRate",tone:"cpl",icon:"SR",label:"Start Rate",value:ad.startRate==null?"-":pct2(ad.startRate),delta:deltaText(ad.startRate,pad.startRate),percentBadge:true,color:"#3b82f6",series:daily.map(x=>x.startRate),format:pct2,adaptive:true},
+    {key:"funnelLeads",tone:"unique",icon:"L",label:"Leads",value:fmt(ad.leads),delta:"Optin Rate "+pct2(funnelOptinRate),percentBadge:true,color:"#06b6d4",series:daily.map(x=>x.leads),format:fmt},
+    {key:"optinRate",tone:"cac",icon:"OR",label:"Optin Rate",value:pct2(funnelOptinRate),delta:deltaText(funnelOptinRate,prevFunnelOptinRate),percentBadge:true,color:"#14b8a6",series:daily.map(x=>x.quiz?x.leads/x.quiz:0),format:pct2,adaptive:true},
     {key:"funnelPurchase",tone:"clicks",icon:"O",label:"OTO",value:fmt(ad.purchases),delta:money2(ad.otoRevenue),color:"#8b5cf6",series:daily.map(x=>x.purchases),format:fmt},
-    {key:"funnelPurCvr",tone:"cvr",icon:"CVR",label:"Funnel OTO CVR",value:ad.funnelPurCvr==null?"-":pct(ad.funnelPurCvr),delta:deltaText(ad.funnelPurCvr||0,pad.funnelPurCvr||0),color:"#06b6d4",series:daily.map(x=>x.funnelPurCvr),format:pct,adaptive:true},
-    {key:"aov",tone:"close",icon:"AOV",label:"AOV",value:ad.aov==null?"-":money2(ad.aov),delta:deltaText(ad.aov||0,pad.aov||0),color:"#a3e635",series:daily.map(x=>x.uniq?ad.aov||0:0),format:money2},
+    {key:"funnelPurCvr",tone:"cvr",icon:"CVR",label:"Funnel OTO CVR",value:ad.funnelPurCvr==null?"-":pct(ad.funnelPurCvr),delta:deltaText(ad.funnelPurCvr,pad.funnelPurCvr),percentBadge:true,color:"#06b6d4",series:daily.map(x=>x.funnelPurCvr),format:pct,adaptive:true},
+    {key:"aov",tone:"close",icon:"AOV",label:"AOV",value:ad.aov==null?"-":money2(ad.aov),delta:deltaText(ad.aov,pad.aov),percentBadge:true,color:"#a3e635",series:daily.map(x=>x.uniq?ad.aov||0:0),format:money2},
   ];
   const marketingKeys=new Set(["spend","clicks","leads","cpl","uniq","cac","cpc","orders","revenue","roas"]);
   const cards=state.view==="funnel"?funnelCards:allCards.filter(card=>marketingKeys.has(card.key));
@@ -1288,7 +1317,7 @@ function renderSummary(ga,emb){
         <div class="summary-card-icon">${card.icon}</div>
         <div class="summary-card-label">${card.label}</div>
         <div class="summary-card-value">${card.value}</div>
-        <div class="summary-card-sub">${card.delta}</div>
+        ${(!card.percentBadge||showWebinarPercentages)&&card.delta?`<div class="summary-card-sub">${card.delta}</div>`:""}
       </div>
       <div class="summary-card-spark" id="summary_${card.key}"></div>
     </article>`).join("");

@@ -469,6 +469,10 @@ function mapPlatform(value){
   }
   return "Other";
 }
+function leadContactKey(row){
+  const id=String(row&&row.customerId||"");
+  return row&&row.leads&&id.startsWith("LEAD:")?id.slice(5):"";
+}
 function detectOfferMarker(value){
   const text=String(value||"").toLowerCase();
   const losingWeight=text.indexOf("ae - 3 day losing weight");
@@ -1010,6 +1014,8 @@ function filteredEmbFor(start,end){
 }
 function summarizeAds(rows,start=state.start,end=state.end){
   const summary={spend:0,clicks:0,impressions:0,leads:0,uniq:0,purchases:0,revenue:0,otoRevenue:0};
+  const leadIds=new Set();
+  let legacyLeads=0;
   const customerIds=new Set();
   let legacyUniqueCustomers=0;
   rows.forEach(row=>{
@@ -1018,11 +1024,15 @@ function summarizeAds(rows,start=state.start,end=state.end){
       summary.spend+=row.spend||0;
       summary.clicks+=row.clicks||0;
       summary.impressions+=row.impressions||0;
-      summary.leads+=row.leads||0;
+      if(row.leads){
+        const leadId=leadContactKey(row);
+        if(leadId)leadIds.add(leadId);
+        else legacyLeads+=row.leads;
+      }
     }
-    if(dateInRangeFor(saleDate,start,end)){
-      if(row.customerId)customerIds.add(row.customerId);
-      else legacyUniqueCustomers+=row.uniq||0;
+    if(dateInRangeFor(saleDate,start,end)&&row.uniq){
+      if(row.customerId&&!String(row.customerId).startsWith("LEAD:"))customerIds.add(row.customerId);
+      else legacyUniqueCustomers+=row.uniq;
     }
     if(dateInRangeFor(saleDate,start,end)){
       summary.purchases+=row.purchases||0;
@@ -1030,6 +1040,7 @@ function summarizeAds(rows,start=state.start,end=state.end){
       summary.otoRevenue+=row.otoRevenue||0;
     }
   });
+  summary.leads=leadIds.size+legacyLeads;
   summary.uniq=customerIds.size+legacyUniqueCustomers;
   summary.cpl=summary.leads?summary.spend/summary.leads:null;
   summary.cpc=summary.clicks?summary.spend/summary.clicks:null;
@@ -1056,7 +1067,7 @@ function deltaText(cur,prev){
 }
 function dailySummary(ga,emb){
   const days=daysBetween();
-  const rows=days.map(d=>({d,sessions:0,users:0,views:0,engaged:0,quiz:0,spend:0,clicks:0,impressions:0,leads:0,uniq:0,purchases:0,revenue:0,sources:new Set(),pages:new Set(),contacts:new Set(),customerIds:new Set()}));
+  const rows=days.map(d=>({d,sessions:0,users:0,views:0,engaged:0,quiz:0,spend:0,clicks:0,impressions:0,leads:0,uniq:0,purchases:0,revenue:0,sources:new Set(),pages:new Set(),contacts:new Set(),leadIds:new Set(),customerIds:new Set()}));
   ga.forEach(r=>{
     const i=Math.round((gaDate(r)-state.start)/DAY);
     if(!rows[i])return;
@@ -1081,22 +1092,30 @@ function dailySummary(ga,emb){
       rows[deliveryIndex].spend+=row.spend||0;
       rows[deliveryIndex].clicks+=row.clicks||0;
       rows[deliveryIndex].impressions+=row.impressions||0;
-      rows[deliveryIndex].leads+=row.leads||0;
+      if(row.leads){
+        const leadId=leadContactKey(row);
+        if(leadId)rows[deliveryIndex].leadIds.add(leadId);
+        else rows[deliveryIndex].leads+=row.leads;
+      }
     }
     const saleDate=salesMetricDate(row);
     const customerIndex=Math.round((saleDate-state.start)/DAY);
     if(rows[customerIndex]){
       rows[customerIndex].purchases+=row.purchases||0;
       rows[customerIndex].revenue+=row.revenue||0;
-      if(row.customerId)rows[customerIndex].customerIds.add(row.customerId);
-      else rows[customerIndex].uniq+=row.uniq||0;
+      if(row.uniq){
+        if(row.customerId&&!String(row.customerId).startsWith("LEAD:"))rows[customerIndex].customerIds.add(row.customerId);
+        else rows[customerIndex].uniq+=row.uniq;
+      }
     }
   });
   return rows.map(r=>{
     const quiz=DEMO_MODE?Math.max(r.quiz,Math.round(r.clicks*.16)):r.quiz;
+    const leads=r.leadIds.size+r.leads;
     const uniq=r.customerIds.size+r.uniq;
     return {
     ...r,
+    leads,
     uniq,
     quiz,
     cvr:r.sessions?quiz/r.sessions:0,
@@ -1429,38 +1448,53 @@ function campaignRateClass(value,target=1){
 }
 function renderCampaignTable(){
   const map=new Map();
+  const totalLeadIds=new Set();
+  let totalLegacyLeads=0;
   const totalCustomerIds=new Set();
   let totalLegacyUniqueCustomers=0;
   filteredAds().forEach(row=>{
     const key=row.platform||"Unknown";
     const o=map.get(key)||{
       platform:row.platform,
-      spend:0,clicks:0,leads:0,uniq:0,purchases:0,revenue:0,customerIds:new Set()
+      spend:0,clicks:0,leads:0,uniq:0,purchases:0,revenue:0,leadIds:new Set(),customerIds:new Set()
     };
     const saleDate=salesMetricDate(row);
     if(dateInRange(row.date)){
       o.spend+=row.spend||0;
       o.clicks+=row.clicks||0;
-      o.leads+=row.leads||0;
+      if(row.leads){
+        const leadId=leadContactKey(row);
+        if(leadId){
+          o.leadIds.add(leadId);
+          totalLeadIds.add(leadId);
+        }else{
+          o.leads+=row.leads;
+          totalLegacyLeads+=row.leads;
+        }
+      }
     }
     if(dateInRange(saleDate)){
       o.purchases+=row.purchases||0;
       o.revenue+=row.revenue||0;
-      if(row.customerId){
+      if(row.uniq&&row.customerId&&!String(row.customerId).startsWith("LEAD:")){
         o.customerIds.add(row.customerId);
         totalCustomerIds.add(row.customerId);
-      }else{
-        o.uniq+=row.uniq||0;
-        totalLegacyUniqueCustomers+=row.uniq||0;
+      }else if(row.uniq){
+        o.uniq+=row.uniq;
+        totalLegacyUniqueCustomers+=row.uniq;
       }
     }
     map.set(key,o);
   });
-  map.forEach(o=>{o.uniq+=o.customerIds.size});
+  map.forEach(o=>{
+    o.leads+=o.leadIds.size;
+    o.uniq+=o.customerIds.size;
+  });
   const rows=[...map.values()].sort((a,b)=>b.spend-a.spend||b.leads-a.leads);
   const totals=rows.reduce((a,r)=>{
     a.spend+=r.spend;a.clicks+=r.clicks;a.leads+=r.leads;a.purchases+=r.purchases;a.revenue+=r.revenue;return a;
   },{spend:0,clicks:0,leads:0,uniq:0,purchases:0,revenue:0});
+  totals.leads=totalLeadIds.size+totalLegacyLeads;
   totals.uniq=totalCustomerIds.size+totalLegacyUniqueCustomers;
   const metricRow=r=>{
     const optinRate=r.clicks?r.leads/r.clicks:0;
